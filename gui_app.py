@@ -3,6 +3,8 @@ import sys
 from typing import Optional, Type
 
 from PyQt5 import QtWidgets, QtCore
+from alarm_json_exporter import AlarmJsonExporter
+import os
 
 
 class MappingGuiApp:
@@ -53,6 +55,13 @@ class MappingGuiApp:
             self.btn_convert.setEnabled(False)
             self.btn_export_log = QtWidgets.QPushButton("导出日志到文件")
 
+            self.btn_export_alarm_json = QtWidgets.QPushButton(
+                "从 1.json 生成新 JSON（测试）")
+            self.btn_export_alarm_json.setToolTip(
+                "选择一个 ES 风格 JSON（默认 1.json），导出仅包含映射字段的新 JSON")
+            self.btn_export_alarm_json.clicked.connect(
+                self.on_export_alarm_json)
+
             self.log_box = QtWidgets.QTextEdit()
             self.log_box.setReadOnly(True)
             self.log_box.setPlaceholderText("日志输出...")
@@ -81,6 +90,9 @@ class MappingGuiApp:
                 QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
             row4.addWidget(self.btn_convert, 1)
             row4.addWidget(self.btn_export_log, 1)
+            self.btn_export_alarm_json.setSizePolicy(
+                QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            row4.addWidget(self.btn_export_alarm_json, 1)
             layout.addLayout(row4)
 
             layout.addWidget(self.log_box, 1)
@@ -158,3 +170,44 @@ class MappingGuiApp:
                 self.log(f"[OK] 日志已导出：{path}")
             except Exception as e:
                 self.log(f"[ERROR] 日志导出失败：{e}")
+
+        # 新增：调用 AlarmJsonExporter，把 ES 风格的 1.json → *.alarm.json
+        def on_export_alarm_json(self):
+            try:
+                # 1) 选择输入（默认指向当前目录的 1.json）
+                default_in = os.path.join(os.getcwd(), "1.json")
+                start_dir = os.path.dirname(default_in) if os.path.exists(
+                    default_in) else os.getcwd()
+                in_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+                    self, "选择输入 JSON（如 1.json）", default_in if os.path.exists(
+                        default_in) else start_dir,
+                    "JSON 文件 (*.json);;所有文件 (*)"
+                )
+                if not in_path:
+                    return
+
+                # 2) 选择输出路径（默认同目录同名 *.alarm.json）
+                base, _ext = os.path.splitext(in_path)
+                default_out = base + ".alarm.json"
+                out_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                    self, "另存为", default_out, "JSON 文件 (*.json);;所有文件 (*)"
+                )
+                if not out_path:
+                    return
+
+                QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+                self.setEnabled(False)
+                self.log(f"[RUN] Export alarm JSON: {in_path} -> {out_path}")
+
+                exporter = AlarmJsonExporter()
+                written = exporter.export(in_path, out_path)
+
+                self.log(f"[OK] 已生成：{written}")
+                QtWidgets.QMessageBox.information(
+                    self, "完成", f"新 JSON 已生成：\n{written}")
+            except Exception as e:
+                self.log(f"[ERROR] 生成失败：{e}")
+                QtWidgets.QMessageBox.critical(self, "错误", f"生成失败：\n{e}")
+            finally:
+                QtWidgets.QApplication.restoreOverrideCursor()
+                self.setEnabled(True)

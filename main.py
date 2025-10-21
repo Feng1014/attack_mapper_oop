@@ -10,6 +10,7 @@ from payload_printable import PayloadPrintableParser
 from attack_keyword_classifier import AttackKeywordClassifier
 from malware_parser import MalwareNameParser
 from template_writer import TemplateWriter
+from alarm_json_exporter import AlarmJsonExporter
 
 # ==================== 统一列头 ====================
 HEADERS = [
@@ -44,8 +45,10 @@ class Pipeline:
         self.attck = AttackKeywordClassifier()
         self.malware = MalwareNameParser()
         self.writer = TemplateWriter()
+        self._alarm_exporter = AlarmJsonExporter()
 
     # —— 内部：用与 Base64 解码与清洗逻辑（仅用于 payload 列）——
+
     def _decode_payload_for_sheet(self, b64s: str) -> str:
         return self.pp.decode_payload_for_sheet(b64s)
 
@@ -178,6 +181,14 @@ class Pipeline:
             df=df, template_path=template_path, save_path=None,
             do_backup_if_overwrite=True, sheet_name=sheet_name
         )
+
+    # 导出“精简告警 JSON”（只含指定映射字段）
+    def export_alarm_json(self, json_path: str, out_path: Optional[str] = None) -> str:
+        """
+        读取 ES 风格 JSON（如 1.json），写出仅包含目标字段的新 JSON。
+        applicationProtocol 与现有 proofType 逻辑一致；payload 解码逻辑与现有一致。
+        """
+        return self._alarm_exporter.export(json_path, out_path)
 
 
 # ============== GUI 入口：拆分到独立 class，但这里提供启动器 ==============
